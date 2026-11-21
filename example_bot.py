@@ -141,7 +141,7 @@ def _choose_position(x, y, cx, cy, radius,
 
 
 class Bot:
-    name = "codemax-v10"
+    name = "codemax-v11"
 
     def __init__(self, hello: mf.Hello):
         cfg = hello["config"]
@@ -261,7 +261,12 @@ class Bot:
                 loot = [p for p in obs.get("pickups", []) if p.get("kind") != "gun"]
                 if loot:
                     p = min(loot, key=lambda p: math.dist(p["pos"][:2], (x, y)))
-                    if math.dist(p["pos"][:2], (x, y)) < 45.0:
+                    # 45 m was far too tight: 40 weapons spawn across a
+                    # 1067x722 m map, so the detour almost never fired and we
+                    # fought the whole match with the starting gun. Walking
+                    # onto floor loot is silent -- unlike shooting crates,
+                    # which is what got v2 hunted down.
+                    if math.dist(p["pos"][:2], (x, y)) < 120.0:
                         goal = (p["pos"][0], p["pos"][1])
 
         gdx, gdy = goal[0] - x, goal[1] - y
