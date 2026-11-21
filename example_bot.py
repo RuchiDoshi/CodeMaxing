@@ -50,6 +50,18 @@ def _clamp_circle(px, py, cx, cy, rad):
         return px, py
     return cx + dx * rad / d, cy + dy * rad / d
 
+def _predict_enemy_position(enemy, horizon=1.5):
+    """
+    Estimate where an enemy will be after horizon seconds.
+    """
+    ex, ey, ez = enemy["pos"]
+    vx, vy, vz = enemy.get("vel", [0.0, 0.0, 0.0])
+
+    return (
+        ex + vx * horizon,
+        ey + vy * horizon
+    )
+
 def _choose_position(x, y, cx, cy, radius,
                      nx, ny, nradius, enemies):
     """
@@ -109,10 +121,18 @@ def _choose_position(x, y, cx, cy, radius,
         enemy_risk = 0.0
 
         for enemy in enemies:
-            ex, ey = enemy["pos"][:2]
-            distance = math.hypot(px - ex, py - ey)
+            ex, ey = _predict_enemy_position(enemy)
 
-            risk = max(0.0, (100.0 - distance) / 100.0)
+            distance = math.hypot(
+                px - ex,
+                py - ey
+            )
+
+            risk = max(
+                0.0,
+                (120.0 - distance) / 120.0
+            )
+
             enemy_risk += risk ** 2
 
         # Avoid travelling unnecessarily far.
