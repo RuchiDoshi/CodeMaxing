@@ -50,18 +50,6 @@ def _clamp_circle(px, py, cx, cy, rad):
         return px, py
     return cx + dx * rad / d, cy + dy * rad / d
 
-def _predict_enemy_position(enemy, horizon=1.5):
-    """
-    Estimate where an enemy will be after horizon seconds.
-    """
-    ex, ey, ez = enemy["pos"]
-    vx, vy, vz = enemy.get("vel", [0.0, 0.0, 0.0])
-
-    return (
-        ex + vx * horizon,
-        ey + vy * horizon
-    )
-
 def _choose_position(x, y, cx, cy, radius,
                      nx, ny, nradius, enemies):
     """
@@ -121,18 +109,10 @@ def _choose_position(x, y, cx, cy, radius,
         enemy_risk = 0.0
 
         for enemy in enemies:
-            ex, ey = _predict_enemy_position(enemy)
+            ex, ey = enemy["pos"][:2]
+            distance = math.hypot(px - ex, py - ey)
 
-            distance = math.hypot(
-                px - ex,
-                py - ey
-            )
-
-            risk = max(
-                0.0,
-                (120.0 - distance) / 120.0
-            )
-
+            risk = max(0.0, (100.0 - distance) / 100.0)
             enemy_risk += risk ** 2
 
         # Avoid travelling unnecessarily far.
@@ -161,7 +141,7 @@ def _choose_position(x, y, cx, cy, radius,
 
 
 class Bot:
-    name = "codemax-v8"
+    name = "codemax-v10"
 
     def __init__(self, hello: mf.Hello):
         cfg = hello["config"]
@@ -368,7 +348,11 @@ class Bot:
                 fire0 = bool(in_gun_range and ammo > 0)
                 if kind1 == "lightning" and tdist <= 42.0 and energy >= 5:
                     fire1 = True
-                elif kind1 == "laser" and tdist <= 260.0 and not fleeing:
+                # The laser was switched off while retreating, which turned our
+                # hardest hit (315 at full charge, against the gun's 45) off in
+                # exactly the window where returning fire just earned us +0.25.
+                # Charging costs half our walking speed, so this is a real trade.
+                elif kind1 == "laser" and tdist <= 260.0:
                     # Hold to charge, let go to fire. Release past half charge
                     # rather than letting it auto-fire two seconds later.
                     fire1 = ((w1 or {}).get("charge") or 0.0) < 0.55
