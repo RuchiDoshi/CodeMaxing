@@ -16,8 +16,25 @@ THREAT_SOUNDS = {"gun", "mortar", "explosion", "laser", "laser_charge",
                  "lightning", "jet", "boost", "step", "reload"}
 # Which loose weapon is worth carrying, best first.
 PICKUP_RANK = {"laser": 3, "lightning": 2, "mortar": 1}
-# Upgrade ids we prefer, best first; matched as substrings.
-UPGRADE_RANK = ("armor", "sensor", "regen", "hp", "health", "energy", "speed")
+# Real upgrade ids from hello.config.upgrades, ranked for a bot that wins by
+# outliving people. Repair nanites comes first because it is the one that
+# pays off our whole plan: regen x1.6 and regen_delay -1.5 s per stack turns
+# breaking contact into a full heal in seconds instead of half a minute.
+UPGRADE_ORDER = {uid: i for i, uid in enumerate((
+    "nanites",       # regen_per_s x1.6, regen_delay -1.5 s  (max 2)
+    "plating",       # max hp x1.15                          (max 3)
+    "armor",         # -8% damage taken                      (max 3)
+    "servos",        # walk and boost speed +8%              (max 3)
+    "sensors",       # +25 m sight, half the bearing error   (max 2)
+    "gun_velocity",  # faster bullets land more of our leads (max 2)
+    "gun_rate",
+    "gun_damage",
+    "gun_mag",
+    "reactor",
+    "capacitor",
+    "jets",
+    "gyros",
+))}
 
 
 def _unit(dx, dy):
@@ -35,7 +52,7 @@ def _clamp_circle(px, py, cx, cy, rad):
 
 
 class Bot:
-    name = "codemax-v3"
+    name = "codemax-v4"
 
     def __init__(self, hello: mf.Hello):
         cfg = hello["config"]
@@ -72,15 +89,11 @@ class Bot:
         return _unit(ax, ay)
 
     def _pick_upgrade(self, choices):
-        best_i, best_r = 0, -1
+        """Lowest rank wins; anything unlisted sits behind everything listed."""
+        best_i, best_r = 0, 10 ** 6
         for i, c in enumerate(choices):
-            cid = str(c.get("id", ""))
-            rank = 0
-            for j, key in enumerate(UPGRADE_RANK):
-                if key in cid:
-                    rank = len(UPGRADE_RANK) - j
-                    break
-            if rank > best_r:
+            rank = UPGRADE_ORDER.get(str(c.get("id", "")), 999)
+            if rank < best_r:
                 best_i, best_r = i, rank
         return best_i
 
@@ -176,15 +189,7 @@ class Bot:
         gun_speed = gun_stats.get("speed", 252.0)
         gun_range = gun_stats.get("range", 230.0)
 
-        # Never start a fight. Firing is the loudest thing we can do (the gun
-        # carries 320 m to a squad that shares vision), so we shoot only what
-        # is already on top of us or already shooting at us.
-        if fleeing:
-            engage_r = 0.0
-        elif recently_hurt:
-            engage_r = 80.0
-        else:
-            engage_r = 40.0
+        engage_r = 0.0 if fleeing else (110.0 if hp_frac > 0.5 else 45.0)
         if cornered:
             engage_r = max(engage_r, 60.0)
 
