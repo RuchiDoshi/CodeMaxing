@@ -141,7 +141,7 @@ def _choose_position(x, y, cx, cy, radius,
 
 
 class Bot:
-    name = "codemax-v8"
+    name = "codemax-v9"
 
     def __init__(self, hello: mf.Hello):
         cfg = hello["config"]
@@ -294,7 +294,7 @@ class Bot:
         # damage. Legs and torso are independent (§6), so we can walk away and
         # keep shooting backwards -- and keeping them in our front arc denies
         # the x1.5 rear multiplier at the same time.
-        engage_r = 90.0 if fleeing else (110.0 if hp_frac > 0.5 else 45.0)
+        engage_r = 130.0 if fleeing else (110.0 if hp_frac > 0.5 else 45.0)
         if cornered:
             engage_r = max(engage_r, 60.0)
 
