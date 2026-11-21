@@ -50,6 +50,95 @@ def _clamp_circle(px, py, cx, cy, rad):
         return px, py
     return cx + dx * rad / d, cy + dy * rad / d
 
+def _choose_position(x, y, cx, cy, radius,
+                     nx, ny, nradius, enemies):
+    """
+    Evaluate candidate positions in the current/next safe-zone
+    intersection. Return the highest-scoring position.
+    """
+
+    margin = 10.0
+    usable_next = max(1.0, nradius - margin)
+    usable_current = max(1.0, radius - margin)
+
+    candidates = [(nx, ny)]
+
+    # Generate candidate positions at different distances
+    # and angles around the next zone's centre.
+    for fraction in (0.25, 0.50, 0.72):
+        r = usable_next * fraction
+
+        for i in range(24):
+            angle = (2.0 * math.pi * i) / 24
+
+            px = nx + math.cos(angle) * r
+            py = ny + math.sin(angle) * r
+
+            candidates.append((px, py))
+
+    best_position = None
+    best_score = -float("inf")
+
+    for px, py in candidates:
+
+        # Candidate must fit inside both circles.
+        d_current = math.hypot(px - cx, py - cy)
+        d_next = math.hypot(px - nx, py - ny)
+
+        if d_current > usable_current:
+            continue
+
+        if d_next > usable_next:
+            continue
+
+        # Reward positions with room before either zone edge.
+        current_margin = (
+            usable_current - d_current
+        ) / usable_current
+
+        next_margin = (
+            usable_next - d_next
+        ) / usable_next
+
+        zone_score = (
+            0.75 * current_margin
+            + 1.25 * next_margin
+        )
+
+        # Penalise positions near enemy mechs.
+        enemy_risk = 0.0
+
+        for enemy in enemies:
+            ex, ey = enemy["pos"][:2]
+            distance = math.hypot(px - ex, py - ey)
+
+            risk = max(0.0, (100.0 - distance) / 100.0)
+            enemy_risk += risk ** 2
+
+        # Avoid travelling unnecessarily far.
+        travel_distance = math.hypot(px - x, py - y)
+
+        travel_cost = travel_distance / max(nradius, 1.0)
+
+        # Combined strategic score.
+        score = (
+            2.0 * zone_score
+            - 2.5 * enemy_risk
+            - 0.35 * travel_cost
+        )
+
+        if score > best_score:
+            best_score = score
+            best_position = (px, py)
+
+    # Fallback if the circles do not overlap sufficiently.
+    if best_position is None:
+        best_position = _clamp_circle(
+            nx, ny, cx, cy, max(6.0, radius - margin)
+        )
+
+    return best_position
+
 
 class Bot:
     name = "codemax-v4"
@@ -133,21 +222,33 @@ class Bot:
         urgent = not me.get("in_zone", True)
 
         if urgent:
+            # Get back inside the current safe zone first.
             goal = (cx, cy)
+
         else:
-            # Hold the inside edge of the next circle, on whichever side we
-            # are already on, nudged away from known threats. The centre is
-            # where everyone collides, so we stay off it.
-            ox, oy = _unit(x - nx, y - ny)
-            if (ox, oy) == (0.0, 0.0):
-                ox, oy = 1.0, 0.0
-            bx, by = _unit(ox + away[0] * 1.5, oy + away[1] * 1.5)
-            ring = max(6.0, nradius * 0.72)
-            goal = (nx + bx * ring, ny + by * ring)
+            # Evaluate possible strategic positions.
+            goal = _choose_position(
+                x, y,
+                cx, cy, radius,
+                nx, ny, nradius,
+                mechs
+            )
+
+            # If health is low, prioritise escaping threats.
             if fleeing:
-                goal = _clamp_circle(x + away[0] * 70, y + away[1] * 70,
-                                     nx, ny, max(6.0, nradius * 0.88))
-            goal = _clamp_circle(goal[0], goal[1], cx, cy, max(6.0, radius - 12))
+                goal = _clamp_circle(
+                    x + away[0] * 70,
+                    y + away[1] * 70,
+                    nx, ny,
+                    max(6.0, nradius * 0.88)
+                )
+
+            # Keep the destination inside the current zone.
+            goal = _clamp_circle(
+                goal[0], goal[1],
+                cx, cy,
+                max(6.0, radius - 12)
+            )
 
         # Detour for loot only when nothing is pressing us.
         w1 = me["weapons"][1] if len(me["weapons"]) > 1 else None
