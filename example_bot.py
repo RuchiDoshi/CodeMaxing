@@ -141,7 +141,7 @@ def _choose_position(x, y, cx, cy, radius,
 
 
 class Bot:
-    name = "codemax-v4"
+    name = "codemax-v8"
 
     def __init__(self, hello: mf.Hello):
         cfg = hello["config"]
@@ -290,7 +290,11 @@ class Bot:
         gun_speed = gun_stats.get("speed", 252.0)
         gun_range = gun_stats.get("range", 230.0)
 
-        engage_r = 0.0 if fleeing else (110.0 if hp_frac > 0.5 else 45.0)
+        # Retreating used to mean holding fire, which handed the chaser free
+        # damage. Legs and torso are independent (§6), so we can walk away and
+        # keep shooting backwards -- and keeping them in our front arc denies
+        # the x1.5 rear multiplier at the same time.
+        engage_r = 90.0 if fleeing else (110.0 if hp_frac > 0.5 else 45.0)
         if cornered:
             engage_r = max(engage_r, 60.0)
 
