@@ -5,7 +5,9 @@ it holds the inside edge of the circle the zone is closing to, keeps its
 distance from the pack, breaks contact and regenerates when hurt, and
 only shoots when a fight has already found it.
 """
+import json
 import math
+import os
 
 import mechfight as mf
 
@@ -42,6 +44,19 @@ def _unit(dx, dy):
     return (dx / m, dy / m) if m > 1e-6 else (0.0, 0.0)
 
 
+def _side(ax, ay, bx, by, cx, cy):
+    return (bx - ax) * (cy - ay) - (by - ay) * (cx - ax)
+
+
+def _seg_cross(ax, ay, bx, by, cx, cy, dx, dy):
+    """Do segments AB and CD properly cross?"""
+    d1 = _side(cx, cy, dx, dy, ax, ay)
+    d2 = _side(cx, cy, dx, dy, bx, by)
+    d3 = _side(ax, ay, bx, by, cx, cy)
+    d4 = _side(ax, ay, bx, by, dx, dy)
+    return ((d1 > 0) != (d2 > 0)) and ((d3 > 0) != (d4 > 0))
+
+
 def _clamp_circle(px, py, cx, cy, rad):
     """Pull a point inside a circle, leaving it alone if it already is."""
     dx, dy = px - cx, py - cy
@@ -52,7 +67,7 @@ def _clamp_circle(px, py, cx, cy, rad):
 
 
 class Bot:
-    name = "codemax-v4"
+    name = "codemax-v6"
 
     def __init__(self, hello: mf.Hello):
         cfg = hello["config"]
@@ -62,6 +77,74 @@ class Bot:
         self.hurt_t = -99.0
         self.prev_xy = None
         self.stuck = 0
+        self.cover = None       # cached escape point
+        self.cover_at = -999    # tick it was chosen on
+        self.prisms = self._load_prisms(hello)
+
+    @staticmethod
+    def _load_prisms(hello):
+        """Buildings as (minx, miny, maxx, maxy, base, top, ring), bbox first.
+
+        The map is 0.29 MB and parses in ten milliseconds, against a hello
+        budget of twenty seconds, so there is no reason not to read it.
+        """
+        out = []
+        try:
+            path = os.path.join(hello["map"]["dir"], "v2", "world.json")
+            with open(path, "r") as fh:
+                world = json.load(fh)
+        except Exception:
+            return out  # play blind rather than die at startup
+        for p in world.get("prisms", []):
+            ring = p.get("ring") or []
+            if len(ring) < 6:
+                continue
+            xs = ring[0::2]
+            ys = ring[1::2]
+            out.append((min(xs), min(ys), max(xs), max(ys),
+                        p.get("base", 0.0), p.get("top", 0.0), ring))
+        return out
+
+    def _blocked(self, ax, ay, az, bx, by, bz):
+        """True if a building stands between the two points."""
+        lo, hi = (az, bz) if az < bz else (bz, az)
+        sx0, sx1 = (ax, bx) if ax < bx else (bx, ax)
+        sy0, sy1 = (ay, by) if ay < by else (by, ay)
+        for px0, py0, px1, py1, base, top, ring in self.prisms:
+            # Cheap rejects first: wrong height band, or nowhere near the line.
+            if top < lo or base > hi:
+                continue
+            if px1 < sx0 or px0 > sx1 or py1 < sy0 or py0 > sy1:
+                continue
+            n = len(ring) // 2
+            for i in range(n):
+                j = (i + 1) % n
+                if _seg_cross(ax, ay, bx, by,
+                              ring[2 * i], ring[2 * i + 1],
+                              ring[2 * j], ring[2 * j + 1]):
+                    return True
+        return False
+
+    def _cover_point(self, x, y, z, threats, inside):
+        """Somewhere close by that the nearest hunters cannot see into."""
+        best, best_score = None, -1e18
+        eye = z + 8.0
+        for i in range(8):
+            a = i * (math.pi / 4.0)
+            ca, sa = math.cos(a), math.sin(a)
+            for step in (25.0, 45.0):
+                px, py = x + ca * step, y + sa * step
+                if not inside(px, py):
+                    continue
+                score = -step * 0.05
+                for tx, ty, tz in threats:
+                    score += min(math.hypot(px - tx, py - ty), 150.0) * 0.1
+                    # Breaking line of sight beats simply being further away.
+                    if self._blocked(px, py, eye, tx, ty, tz + 4.5):
+                        score += 60.0
+                if score > best_score:
+                    best, best_score = (px, py), score
+        return best
 
     # -- helpers ---------------------------------------------------------
 
@@ -122,7 +205,12 @@ class Bot:
         nearest_d = min((math.dist(m["pos"][:2], (x, y)) for m in mechs), default=1e9)
         threatened = bool(mechs) or recently_hurt
         cornered = nearest_d < 35.0
-        fleeing = hp_frac < 0.5 and threatened and not cornered
+        # Leave while leaving is still cheap. The house bots share vision and
+        # focus fire, so a second mech in sight means the group is arriving:
+        # waiting for half health to run just means running hurt and watched.
+        # Inside 35 m running is worse than turning, because a fleeing mech
+        # shows its back and rear hits land at x1.5.
+        fleeing = (hp_frac < 0.5 or len(mechs) >= 2) and threatened and not cornered
 
         # -- where to stand ------------------------------------------------
         zone = obs["zone"]
@@ -147,6 +235,23 @@ class Bot:
             if fleeing:
                 goal = _clamp_circle(x + away[0] * 70, y + away[1] * 70,
                                      nx, ny, max(6.0, nradius * 0.88))
+                # Prefer running out of sight over running in a straight line.
+                # Recomputed every few decisions: the search costs a few ms and
+                # the answer does not change meaningfully tick to tick.
+                if self.prisms and mechs:
+                    if self.cover is None or obs["tick"] - self.cover_at > 6:
+                        near2 = sorted(mechs, key=lambda m: math.dist(m["pos"][:2], (x, y)))[:2]
+                        threats = [(m["pos"][0], m["pos"][1], m["pos"][2]) for m in near2]
+                        lim = max(6.0, nradius * 0.88)
+                        spot = self._cover_point(
+                            x, y, z, threats,
+                            lambda px, py: math.hypot(px - nx, py - ny) <= lim)
+                        self.cover = spot
+                        self.cover_at = obs["tick"]
+                    if self.cover is not None:
+                        goal = self.cover
+                else:
+                    self.cover = None
             goal = _clamp_circle(goal[0], goal[1], cx, cy, max(6.0, radius - 12))
 
         # Detour for loot only when nothing is pressing us.
