@@ -141,7 +141,7 @@ def _choose_position(x, y, cx, cy, radius,
 
 
 class Bot:
-    name = "codemax-v10"
+    name = "codemax-v8"
 
     def __init__(self, hello: mf.Hello):
         cfg = hello["config"]
@@ -348,11 +348,7 @@ class Bot:
                 fire0 = bool(in_gun_range and ammo > 0)
                 if kind1 == "lightning" and tdist <= 42.0 and energy >= 5:
                     fire1 = True
-                # The laser was switched off while retreating, which turned our
-                # hardest hit (315 at full charge, against the gun's 45) off in
-                # exactly the window where returning fire just earned us +0.25.
-                # Charging costs half our walking speed, so this is a real trade.
-                elif kind1 == "laser" and tdist <= 260.0:
+                elif kind1 == "laser" and tdist <= 260.0 and not fleeing:
                     # Hold to charge, let go to fire. Release past half charge
                     # rather than letting it auto-fire two seconds later.
                     fire1 = ((w1 or {}).get("charge") or 0.0) < 0.55
