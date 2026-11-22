@@ -21,8 +21,8 @@ PICKUP_RANK = {"laser": 3, "lightning": 2, "mortar": 1}
 # pays off our whole plan: regen x1.6 and regen_delay -1.5 s per stack turns
 # breaking contact into a full heal in seconds instead of half a minute.
 UPGRADE_ORDER = {uid: i for i, uid in enumerate((
-    "plating",       # max hp x1.15                          (max 3)
     "armor",         # -8% damage taken                      (max 3)
+    "plating",       # max hp x1.15                          (max 3)
     "nanites",       # regen_per_s x1.6, regen_delay -1.5 s  (max 2)
     "servos",        # walk and boost speed +8%              (max 3)
     "sensors",       # +25 m sight, half the bearing error   (max 2)
@@ -299,7 +299,7 @@ def _blocked(blockers, ax, ay, bx, by):
 
 
 class Bot:
-    name = "codemax-v40"
+    name = "codemax-v49"
 
     def __init__(self, hello: mf.Hello):
         cfg = hello["config"]
