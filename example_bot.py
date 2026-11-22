@@ -299,7 +299,7 @@ def _blocked(blockers, ax, ay, bx, by):
 
 
 class Bot:
-    name = "codemax-v46"
+    name = "codemax-v40"
 
     def __init__(self, hello: mf.Hello):
         cfg = hello["config"]
@@ -521,7 +521,7 @@ class Bot:
 
         if danger > 0.0:
             # Blend evasive movement with our strategic direction.
-            dodge_weight = 0.5 + 0.5 * danger
+            dodge_weight = 0.35 + 0.55 * danger
 
             mvx = (1.0 - dodge_weight) * mvx + dodge_weight * dodge_x
             mvy = (1.0 - dodge_weight) * mvy + dodge_weight * dodge_y
