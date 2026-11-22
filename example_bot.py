@@ -299,7 +299,7 @@ def _blocked(blockers, ax, ay, bx, by):
 
 
 class Bot:
-    name = "codemax-v47"
+    name = "codemax-v40"
 
     def __init__(self, hello: mf.Hello):
         cfg = hello["config"]
@@ -410,8 +410,8 @@ class Bot:
                         mechs, key=lambda m: math.dist(m["pos"][:2], (x, y))
                     )[:3]
                     best_goal, best_cov = goal, -1.0
-                    for i in range(16):
-                        ang = (math.pi / 8.0) * i
+                    for i in range(12):
+                        ang = (math.pi / 6.0) * i
                         dirx = math.cos(ang) * away[0] - math.sin(ang) * away[1]
                         diry = math.sin(ang) * away[0] + math.cos(ang) * away[1]
                         for reach in (70.0, 100.0):
