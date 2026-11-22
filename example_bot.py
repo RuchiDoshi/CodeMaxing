@@ -252,7 +252,7 @@ def _load_blockers(hello):
         minx, maxx, miny, maxy = min(xs), max(xs), min(ys), max(ys)
         cx, cy = 0.5 * (minx + maxx), 0.5 * (miny + maxy)
         r = max(math.hypot(q[0] - cx, q[1] - cy) for q in ring)
-        out.append((minx, miny, maxx, maxy, cx, cy, r, ring))
+        out.append((minx, miny, maxx, maxy, cx, cy, r, pr["top"], ring))
     return out
 
 
@@ -267,39 +267,53 @@ def _seg_dist2(ax, ay, bx, by, px, py):
     return (px - qx) ** 2 + (py - qy) ** 2
 
 
-def _hits(ax, ay, bx, by, cx, cy, dx, dy):
-    """Do segments a-b and c-d cross?"""
-    def side(px, py, qx, qy, rx, ry):
-        v = (qx - px) * (ry - py) - (qy - py) * (rx - px)
-        return 0 if -1e-9 < v < 1e-9 else (1 if v > 0 else -1)
-    d1 = side(ax, ay, bx, by, cx, cy)
-    d2 = side(ax, ay, bx, by, dx, dy)
-    d3 = side(cx, cy, dx, dy, ax, ay)
-    d4 = side(cx, cy, dx, dy, bx, by)
-    return d1 != d2 and d3 != d4
+def _cross_t(ax, ay, bx, by, cx, cy, dx, dy):
+    """Where along a-b it crosses c-d, or None. Returns t in [0, 1]."""
+    rx, ry = bx - ax, by - ay
+    sx, sy = dx - cx, dy - cy
+    den = rx * sy - ry * sx
+    if -1e-12 < den < 1e-12:
+        return None
+    qpx, qpy = cx - ax, cy - ay
+    t = (qpx * sy - qpy * sx) / den
+    u = (qpx * ry - qpy * rx) / den
+    if 0.0 <= t <= 1.0 and 0.0 <= u <= 1.0:
+        return t
+    return None
 
 
-def _blocked(blockers, ax, ay, bx, by):
-    """True if a building stands between the two points."""
+def _blocked(blockers, ax, ay, az, bx, by, bz):
+    """True if a building stands between the two points.
+
+    The sight line climbs from az to bz, so a prism only blocks where its
+    roof is actually above the line. Testing the footprint alone calls a
+    low building cover when the line sails over it -- measured against the
+    recorded stream that was wrong on 7 of 18 lines to mechs we could see,
+    and vision already implies line of sight, so every one of those was a
+    false positive.
+    """
     lo_x, hi_x = (ax, bx) if ax < bx else (bx, ax)
     lo_y, hi_y = (ay, by) if ay < by else (by, ay)
-    for minx, miny, maxx, maxy, cx, cy, r, ring in blockers:
+    for minx, miny, maxx, maxy, cx, cy, r, top, ring in blockers:
         # Cheap rejects first: the bounding box, then the bounding circle.
         if maxx < lo_x or minx > hi_x or maxy < lo_y or miny > hi_y:
             continue
+        if top <= az and top <= bz:
+            continue  # never tall enough to hide either end
         if _seg_dist2(ax, ay, bx, by, cx, cy) > r * r:
             continue
         n = len(ring)
         for i in range(n):
             px, py = ring[i]
             qx, qy = ring[(i + 1) % n]
-            if _hits(ax, ay, bx, by, px, py, qx, qy):
+            t = _cross_t(ax, ay, bx, by, px, py, qx, qy)
+            if t is not None and az + t * (bz - az) < top:
                 return True
     return False
 
 
 class Bot:
-    name = "codemax-v34"
+    name = "codemax-v35"
 
     def __init__(self, hello: mf.Hello):
         cfg = hello["config"]
@@ -368,6 +382,7 @@ class Bot:
         away = self._threat_away(x, y, mechs, obs.get("sounds", []))
 
         nearest_d = min((math.dist(m["pos"][:2], (x, y)) for m in mechs), default=1e9)
+        eye = me.get("stats", {}).get("eye_height", 8.0)
         threatened = bool(mechs) or recently_hurt
         cornered = nearest_d < 35.0
         fleeing = hp_frac < 0.5 and threatened and not cornered
@@ -421,8 +436,10 @@ class Bot:
                             )
                             hidden = sum(
                                 1 for m in watchers
-                                if _blocked(self.blockers, px, py,
-                                            m["pos"][0], m["pos"][1])
+                                if _blocked(self.blockers,
+                                            m["pos"][0], m["pos"][1],
+                                            m["pos"][2] + eye,
+                                            px, py, z + 9.0)
                             )
                             if not hidden:
                                 continue
