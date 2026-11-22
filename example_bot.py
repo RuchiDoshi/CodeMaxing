@@ -299,7 +299,7 @@ def _blocked(blockers, ax, ay, bx, by):
 
 
 class Bot:
-    name = "codemax-v44"
+    name = "codemax-v40"
 
     def __init__(self, hello: mf.Hello):
         cfg = hello["config"]
@@ -506,7 +506,7 @@ class Bot:
                     mvx, mvy = math.cos(me["aim"][0]), math.sin(me["aim"][0])
             # Flip every 8 ticks (0.4 s): long enough to build real lateral
             # speed, short enough that a reversal lands inside most flights.
-            sign = 1.0 if (obs["tick"] // 6) % 2 else -1.0
+            sign = 1.0 if (obs["tick"] // 8) % 2 else -1.0
             mvx, mvy = _unit(mvx - mvy * sign, mvy + mvx * sign)
 
         # -- predictive projectile dodging --------------------------
