@@ -299,7 +299,7 @@ def _blocked(blockers, ax, ay, bx, by):
 
 
 class Bot:
-    name = "codemax-v34"
+    name = "codemax-v39"
 
     def __init__(self, hello: mf.Hello):
         cfg = hello["config"]
@@ -456,27 +456,6 @@ class Bot:
                     p = min(loot, key=lambda p: math.dist(p["pos"][:2], (x, y)))
                     if math.dist(p["pos"][:2], (x, y)) < 45.0:
                         goal = (p["pos"][0], p["pos"][1])
-
-        # Supply drops are broadcast to every mech like the zone is, so
-        # unlike cubes and weapon pickups we know where one is without
-        # having to see it. Capturing is the only route to the upgrade
-        # offers we otherwise never get -- our cube count stays at zero
-        # all match, which is why the upgrade-ranking fix scored exactly
-        # the same as the build that had the ids wrong.
-        if not fleeing and not urgent and hp_frac > 0.3:
-            best_drop, best_dd = None, 120.0
-            for d in obs.get("drops", []):
-                if (d.get("lands_in") or 0.0) > 3.0:
-                    continue  # still in the air, do not camp the spot early
-                held = d.get("holder")
-                if (held is not None and held != me.get("id")
-                        and (d.get("progress") or 0.0) > 1.5):
-                    continue  # someone else has banked most of the clock
-                dd = math.dist(d["pos"][:2], (x, y))
-                if dd < best_dd:
-                    best_drop, best_dd = d, dd
-            if best_drop is not None:
-                goal = (best_drop["pos"][0], best_drop["pos"][1])
 
         gdx, gdy = goal[0] - x, goal[1] - y
         gdist = math.hypot(gdx, gdy)
