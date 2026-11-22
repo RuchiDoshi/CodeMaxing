@@ -222,7 +222,7 @@ def _choose_position(x, y, cx, cy, radius,
 
 
 class Bot:
-    name = "codemax-v30"
+    name = "codemax-v33"
 
     def __init__(self, hello: mf.Hello):
         cfg = hello["config"]
@@ -336,7 +336,7 @@ class Bot:
         if not fleeing and not urgent:
             cubes = obs.get("cubes", [])
             cube = min(cubes, key=lambda c: math.dist(c["pos"][:2], (x, y))) if cubes else None
-            if cube is not None and math.dist(cube["pos"][:2], (x, y)) < 30.0:
+            if cube is not None and math.dist(cube["pos"][:2], (x, y)) < 60.0:
                 goal = (cube["pos"][0], cube["pos"][1])
             elif w1 is None:
                 loot = [p for p in obs.get("pickups", []) if p.get("kind") != "gun"]
