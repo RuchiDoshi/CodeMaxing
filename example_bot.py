@@ -299,7 +299,7 @@ def _blocked(blockers, ax, ay, bx, by):
 
 
 class Bot:
-    name = "codemax-v34"
+    name = "codemax-v36"
 
     def __init__(self, hello: mf.Hello):
         cfg = hello["config"]
@@ -562,7 +562,7 @@ class Bot:
             d = math.dist(m["pos"], me["pos"])
             if d > engage_r:
                 continue
-            score = d + (m.get("hp") or 1400) * 0.06  # finish the wounded
+            score = d + (m.get("hp") or 1400) * 0.12  # finish the wounded
             if score < best:
                 target, best = m, score
         # Drones are free cubes when the coast is clear.
