@@ -222,7 +222,7 @@ def _choose_position(x, y, cx, cy, radius,
 
 
 class Bot:
-    name = "codemax-v20"
+    name = "codemax-v21"
 
     def __init__(self, hello: mf.Hello):
         cfg = hello["config"]
@@ -361,7 +361,7 @@ class Bot:
         # 100 m, against a 2.5 m radius -- while ground_accel 58.5 lets us
         # swap direction in about a quarter second. Legs are independent of
         # the torso, so aim and fire are completely untouched by this.
-        if threatened and not urgent:
+        if threatened and not urgent and nearest_d > 60.0:
             if mvx == 0.0 and mvy == 0.0:
                 # Standing still gives the shooter zero lead error, which is
                 # a free hit. Circle the nearest threat instead.
@@ -420,7 +420,7 @@ class Bot:
         # Shooting more has won every time we have tried it and lost every
         # time we have cut it back, so engage as far as the gun actually
         # reaches rather than at an arbitrary 110 m.
-        engage_r = 150.0 if fleeing else (200.0 if hp_frac > 0.5 else 45.0)
+        engage_r = 90.0 if fleeing else (200.0 if hp_frac > 0.5 else 45.0)
         if cornered:
             engage_r = max(engage_r, 60.0)
 
