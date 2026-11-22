@@ -299,7 +299,7 @@ def _blocked(blockers, ax, ay, bx, by):
 
 
 class Bot:
-    name = "codemax-v43"
+    name = "codemax-v40"
 
     def __init__(self, hello: mf.Hello):
         cfg = hello["config"]
@@ -370,7 +370,7 @@ class Bot:
         nearest_d = min((math.dist(m["pos"][:2], (x, y)) for m in mechs), default=1e9)
         threatened = bool(mechs) or recently_hurt
         cornered = nearest_d < 35.0
-        fleeing = hp_frac < 0.4 and threatened and not cornered
+        fleeing = hp_frac < 0.5 and threatened and not cornered
 
         # -- where to stand ------------------------------------------------
         zone = obs["zone"]
