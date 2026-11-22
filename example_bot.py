@@ -299,7 +299,7 @@ def _blocked(blockers, ax, ay, bx, by):
 
 
 class Bot:
-    name = "codemax-v34"
+    name = "codemax-v38"
 
     def __init__(self, hello: mf.Hello):
         cfg = hello["config"]
@@ -414,7 +414,7 @@ class Bot:
                         ang = (math.pi / 6.0) * i
                         dirx = math.cos(ang) * away[0] - math.sin(ang) * away[1]
                         diry = math.sin(ang) * away[0] + math.cos(ang) * away[1]
-                        for reach in (40.0, 70.0):
+                        for reach in (25.0, 40.0, 70.0):
                             px, py = _clamp_circle(
                                 x + dirx * reach, y + diry * reach,
                                 nx, ny, max(6.0, nradius * 0.88)
