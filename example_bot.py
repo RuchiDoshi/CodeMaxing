@@ -193,7 +193,7 @@ def _choose_position(x, y, cx, cy, radius,
             ex, ey = enemy["pos"][:2]
             distance = math.hypot(px - ex, py - ey)
 
-            risk = max(0.0, (100.0 - distance) / 100.0)
+            risk = max(0.0, (160.0 - distance) / 160.0)
             enemy_risk += risk ** 2
 
         # Avoid travelling unnecessarily far.
@@ -222,7 +222,7 @@ def _choose_position(x, y, cx, cy, radius,
 
 
 class Bot:
-    name = "codemax-v9"
+    name = "codemax-v13"
 
     def __init__(self, hello: mf.Hello):
         cfg = hello["config"]
