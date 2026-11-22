@@ -1,4 +1,4 @@
-﻿"""Survival-first bot for mechfight/1.
+"""Survival-first bot for mechfight/1.
 
 Scoring is placement, not kills, so this bot plays to outlive the field:
 it holds the inside edge of the circle the zone is closing to, keeps its
@@ -222,7 +222,7 @@ def _choose_position(x, y, cx, cy, radius,
 
 
 class Bot:
-    name = "codemax-v9"
+    name = "codemax-v16"
 
     def __init__(self, hello: mf.Hello):
         cfg = hello["config"]
@@ -352,6 +352,29 @@ class Bot:
             mvx = mvy = 0.0  # standing still is silent
         elif gdist < 30.0 and not threatened and not urgent:
             mvx, mvy = mvx * 0.4, mvy * 0.4  # under step_speed, so silent
+
+        # -- jink ------------------------------------------------------
+        # There is no lock-on: every incoming shot is a lead prediction made
+        # against our current velocity, and a bullet needs R/252 s to arrive.
+        # Reversing our lateral velocity mid-flight puts us roughly
+        # 2 * v_lat * (t - tau) from where the shooter aimed -- metres at
+        # 100 m, against a 2.5 m radius -- while ground_accel 58.5 lets us
+        # swap direction in about a quarter second. Legs are independent of
+        # the torso, so aim and fire are completely untouched by this.
+        if threatened and not urgent:
+            if mvx == 0.0 and mvy == 0.0:
+                # Standing still gives the shooter zero lead error, which is
+                # a free hit. Circle the nearest threat instead.
+                if mechs:
+                    n = min(mechs, key=lambda m: math.dist(m["pos"][:2], (x, y)))
+                    ex, ey = _unit(n["pos"][0] - x, n["pos"][1] - y)
+                    mvx, mvy = -ey, ex
+                else:
+                    mvx, mvy = math.cos(me["aim"][0]), math.sin(me["aim"][0])
+            # Flip every 8 ticks (0.4 s): long enough to build real lateral
+            # speed, short enough that a reversal lands inside most flights.
+            sign = 1.0 if (obs["tick"] // 8) % 2 else -1.0
+            mvx, mvy = _unit(mvx - mvy * sign, mvy + mvx * sign)
 
         # -- predictive projectile dodging --------------------------
         projectiles = obs.get("projectiles", [])
