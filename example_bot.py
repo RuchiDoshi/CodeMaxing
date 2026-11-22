@@ -50,6 +50,87 @@ def _clamp_circle(px, py, cx, cy, rad):
         return px, py
     return cx + dx * rad / d, cy + dy * rad / d
 
+def _predict_enemy_position(enemy, horizon=1.5):
+    """
+    Estimate where an enemy will be after horizon seconds.
+    """
+    ex, ey, ez = enemy["pos"]
+    vx, vy, vz = enemy.get("vel", [0.0, 0.0, 0.0])
+
+    return (
+        ex + vx * horizon,
+        ey + vy * horizon
+    )
+
+
+def _projectile_dodge(x, y, z, me, projectiles, gravity):
+    """
+    Predict incoming projectile collisions and return:
+    (evasion_direction_x, evasion_direction_y, danger).
+    """
+    self_vel = me.get("vel") or [0.0, 0.0, 0.0]
+    sx, sy = self_vel[:2]
+
+    best_danger = 0.0
+    best_direction = (0.0, 0.0)
+
+    for p in projectiles:
+        px, py, pz = p["pos"]
+        vx, vy, vz = p["vel"]
+
+        rx, ry = px - x, py - y
+        rvx, rvy = vx - sx, vy - sy
+
+        speed_sq = rvx * rvx + rvy * rvy
+        if speed_sq < 1e-6:
+            continue
+
+        t = -(rx * rvx + ry * rvy) / speed_sq
+
+        if t < 0.05 or t > 0.9:
+            continue
+
+        cx = rx + rvx * t
+        cy = ry + rvy * t
+        distance = math.hypot(cx, cy)
+
+        if distance > 7.0:
+            continue
+
+        fall = 0.5 * gravity * t * t if p.get("kind") == "mortar" else 0.0
+        projectile_z = pz + vz * t - fall
+        mech_z = z + self_vel[2] * t
+
+        if projectile_z < mech_z - 1.0:
+            continue
+        if projectile_z > mech_z + 10.0:
+            continue
+
+        danger = (7.0 - distance) / 7.0
+        danger *= (0.9 - t) / 0.85
+        danger = max(0.0, min(1.0, danger))
+
+        if danger <= best_danger:
+            continue
+
+        speed = math.hypot(vx, vy)
+        if speed < 1e-6:
+            continue
+
+        nx, ny = -vy / speed, vx / speed
+        side = vx * (y - py) - vy * (x - px)
+
+        if abs(side) < 1e-4:
+            if nx * sx + ny * sy < 0:
+                nx, ny = -nx, -ny
+        elif side < 0:
+            nx, ny = -nx, -ny
+
+        best_danger = danger
+        best_direction = (nx, ny)
+
+    return best_direction[0], best_direction[1], best_danger
+
 def _choose_position(x, y, cx, cy, radius,
                      nx, ny, nradius, enemies):
     """
@@ -141,7 +222,7 @@ def _choose_position(x, y, cx, cy, radius,
 
 
 class Bot:
-    name = "codemax-v8"
+    name = "codemax-v9"
 
     def __init__(self, hello: mf.Hello):
         cfg = hello["config"]
@@ -271,6 +352,25 @@ class Bot:
             mvx = mvy = 0.0  # standing still is silent
         elif gdist < 30.0 and not threatened and not urgent:
             mvx, mvy = mvx * 0.4, mvy * 0.4  # under step_speed, so silent
+
+        # -- predictive projectile dodging --------------------------
+        projectiles = obs.get("projectiles", [])
+
+        dodge_x, dodge_y, danger = _projectile_dodge(
+            x, y, z,
+            me,
+            projectiles,
+            self.mortar_g
+        )
+
+        if danger > 0.0:
+            # Blend evasive movement with our strategic direction.
+            dodge_weight = 0.35 + 0.55 * danger
+
+            mvx = (1.0 - dodge_weight) * mvx + dodge_weight * dodge_x
+            mvy = (1.0 - dodge_weight) * mvy + dodge_weight * dodge_y
+
+            mvx, mvy = _unit(mvx, mvy)
 
         # Jump when we have been shoved against something for a while.
         if self.prev_xy is not None and (mvx or mvy):
