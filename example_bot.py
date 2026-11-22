@@ -21,6 +21,7 @@ PICKUP_RANK = {"laser": 3, "lightning": 2, "mortar": 1}
 # pays off our whole plan: regen x1.6 and regen_delay -1.5 s per stack turns
 # breaking contact into a full heal in seconds instead of half a minute.
 UPGRADE_ORDER = {uid: i for i, uid in enumerate((
+    "gun_damage",   # kill faster: every dead bot is one less gun
     "plating",       # max hp x1.15                          (max 3)
     "armor",         # -8% damage taken                      (max 3)
     "nanites",       # regen_per_s x1.6, regen_delay -1.5 s  (max 2)
@@ -28,7 +29,6 @@ UPGRADE_ORDER = {uid: i for i, uid in enumerate((
     "sensors",       # +25 m sight, half the bearing error   (max 2)
     "gun_velocity",  # faster bullets land more of our leads (max 2)
     "gun_rate",
-    "gun_damage",
     "gun_mag",
     "reactor",
     "capacitor",
@@ -222,7 +222,7 @@ def _choose_position(x, y, cx, cy, radius,
 
 
 class Bot:
-    name = "codemax-v30"
+    name = "codemax-v32"
 
     def __init__(self, hello: mf.Hello):
         cfg = hello["config"]
