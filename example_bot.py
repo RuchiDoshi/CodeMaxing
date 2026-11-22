@@ -204,7 +204,7 @@ def _choose_position(x, y, cx, cy, radius,
         # Combined strategic score.
         score = (
             2.0 * zone_score
-            - 1.5 * enemy_risk
+            - 3.5 * enemy_risk
             - 0.35 * travel_cost
         )
 
@@ -222,7 +222,7 @@ def _choose_position(x, y, cx, cy, radius,
 
 
 class Bot:
-    name = "codemax-v23"
+    name = "codemax-v24"
 
     def __init__(self, hello: mf.Hello):
         cfg = hello["config"]
