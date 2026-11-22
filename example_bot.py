@@ -222,7 +222,7 @@ def _choose_position(x, y, cx, cy, radius,
 
 
 class Bot:
-    name = "codemax-v29"
+    name = "codemax-v27"
 
     def __init__(self, hello: mf.Hello):
         cfg = hello["config"]
@@ -354,7 +354,7 @@ class Bot:
         if not fleeing and not urgent and hp_frac > 0.3:
             best_drop, best_dd = None, 120.0
             for d in obs.get("drops", []):
-                if (d.get("lands_in") or 0.0) > 8.0:
+                if (d.get("lands_in") or 0.0) > 3.0:
                     continue  # still in the air, do not camp the spot early
                 held = d.get("holder")
                 if (held is not None and held != me.get("id")
