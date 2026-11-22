@@ -221,12 +221,90 @@ def _choose_position(x, y, cx, cy, radius,
     return best_position
 
 
+
+# -- terrain: the map is mounted read-only at hello.map.dir ------------------
+# Vision needs line of sight (protocol section 8) and the 15 house bots share
+# one vision pool, so the only way to stop the whole squad tracking us is to
+# put a building between us and them. The bot used to run straight down the
+# threat vector, which breaks line of sight only by luck.
+
+def _load_blockers(hello):
+    """Tall prisms as (minx, miny, maxx, maxy, cx, cy, r, ring)."""
+    try:
+        import os, json
+        d = (hello.get("map") or {}).get("dir") or "/arena"
+        with open(os.path.join(d, "v2", "world.json"), "r") as fh:
+            world = json.load(fh)
+    except Exception:
+        return []  # never let a missing map stop the bot playing
+    out = []
+    for pr in world.get("prisms", []):
+        base = max(pr.get("base", 0.0), 0.0)
+        # eye_height is 8 m: anything shorter than that does not hide a mech.
+        if pr.get("top", 0.0) - base < 8.0:
+            continue
+        flat = pr.get("ring") or []
+        ring = [(flat[i], flat[i + 1]) for i in range(0, len(flat) - 1, 2)]
+        if len(ring) < 3:
+            continue
+        xs = [q[0] for q in ring]
+        ys = [q[1] for q in ring]
+        minx, maxx, miny, maxy = min(xs), max(xs), min(ys), max(ys)
+        cx, cy = 0.5 * (minx + maxx), 0.5 * (miny + maxy)
+        r = max(math.hypot(q[0] - cx, q[1] - cy) for q in ring)
+        out.append((minx, miny, maxx, maxy, cx, cy, r, ring))
+    return out
+
+
+def _seg_dist2(ax, ay, bx, by, px, py):
+    dx, dy = bx - ax, by - ay
+    ll = dx * dx + dy * dy
+    if ll <= 1e-9:
+        return (px - ax) ** 2 + (py - ay) ** 2
+    t = ((px - ax) * dx + (py - ay) * dy) / ll
+    t = 0.0 if t < 0.0 else (1.0 if t > 1.0 else t)
+    qx, qy = ax + t * dx, ay + t * dy
+    return (px - qx) ** 2 + (py - qy) ** 2
+
+
+def _hits(ax, ay, bx, by, cx, cy, dx, dy):
+    """Do segments a-b and c-d cross?"""
+    def side(px, py, qx, qy, rx, ry):
+        v = (qx - px) * (ry - py) - (qy - py) * (rx - px)
+        return 0 if -1e-9 < v < 1e-9 else (1 if v > 0 else -1)
+    d1 = side(ax, ay, bx, by, cx, cy)
+    d2 = side(ax, ay, bx, by, dx, dy)
+    d3 = side(cx, cy, dx, dy, ax, ay)
+    d4 = side(cx, cy, dx, dy, bx, by)
+    return d1 != d2 and d3 != d4
+
+
+def _blocked(blockers, ax, ay, bx, by):
+    """True if a building stands between the two points."""
+    lo_x, hi_x = (ax, bx) if ax < bx else (bx, ax)
+    lo_y, hi_y = (ay, by) if ay < by else (by, ay)
+    for minx, miny, maxx, maxy, cx, cy, r, ring in blockers:
+        # Cheap rejects first: the bounding box, then the bounding circle.
+        if maxx < lo_x or minx > hi_x or maxy < lo_y or miny > hi_y:
+            continue
+        if _seg_dist2(ax, ay, bx, by, cx, cy) > r * r:
+            continue
+        n = len(ring)
+        for i in range(n):
+            px, py = ring[i]
+            qx, qy = ring[(i + 1) % n]
+            if _hits(ax, ay, bx, by, px, py, qx, qy):
+                return True
+    return False
+
+
 class Bot:
-    name = "codemax-v30"
+    name = "codemax-v34"
 
     def __init__(self, hello: mf.Hello):
         cfg = hello["config"]
         self.reach = cfg["loot"]["pickup_radius"]
+        self.blockers = _load_blockers(hello)
         self.mortar_g = cfg.get("weapons", {}).get("mortar", {}).get("gravity", 22.0)
         self.hurt_bearing = None
         self.hurt_t = -99.0
@@ -323,6 +401,40 @@ class Bot:
                     nx, ny,
                     max(6.0, nradius * 0.88)
                 )
+                # Running straight down the threat vector keeps us in full
+                # view the whole way, and all 15 house bots share one vision
+                # pool. Prefer a retreat that ends with a building between us
+                # and them: out of sight, their memory of us expires in 5 s.
+                if self.blockers and mechs:
+                    watchers = sorted(
+                        mechs, key=lambda m: math.dist(m["pos"][:2], (x, y))
+                    )[:3]
+                    best_goal, best_cov = goal, -1.0
+                    for i in range(12):
+                        ang = (math.pi / 6.0) * i
+                        dirx = math.cos(ang) * away[0] - math.sin(ang) * away[1]
+                        diry = math.sin(ang) * away[0] + math.cos(ang) * away[1]
+                        for reach in (40.0, 70.0):
+                            px, py = _clamp_circle(
+                                x + dirx * reach, y + diry * reach,
+                                nx, ny, max(6.0, nradius * 0.88)
+                            )
+                            hidden = sum(
+                                1 for m in watchers
+                                if _blocked(self.blockers, px, py,
+                                            m["pos"][0], m["pos"][1])
+                            )
+                            if not hidden:
+                                continue
+                            # Among hiding spots, keep the one that also
+                            # carries us furthest from the pack.
+                            gain = hidden + 0.01 * min(
+                                math.dist((px, py), m["pos"][:2])
+                                for m in watchers
+                            )
+                            if gain > best_cov:
+                                best_goal, best_cov = (px, py), gain
+                    goal = best_goal
 
             # Keep the destination inside the current zone.
             goal = _clamp_circle(
