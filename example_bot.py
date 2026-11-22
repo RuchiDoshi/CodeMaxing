@@ -222,7 +222,7 @@ def _choose_position(x, y, cx, cy, radius,
 
 
 class Bot:
-    name = "codemax-v25"
+    name = "codemax-v26"
 
     def __init__(self, hello: mf.Hello):
         cfg = hello["config"]
@@ -352,7 +352,7 @@ class Bot:
         # all match, which is why the upgrade-ranking fix scored exactly
         # the same as the build that had the ids wrong.
         if not fleeing and not urgent and hp_frac > 0.6:
-            best_drop, best_dd = None, 70.0
+            best_drop, best_dd = None, 120.0
             for d in obs.get("drops", []):
                 if (d.get("lands_in") or 0.0) > 3.0:
                     continue  # still in the air, do not camp the spot early
