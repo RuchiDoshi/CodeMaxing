@@ -190,18 +190,10 @@ def _choose_position(x, y, cx, cy, radius,
         enemy_risk = 0.0
 
         for enemy in enemies:
-            ex, ey = _predict_enemy_position(enemy)
+            ex, ey = enemy["pos"][:2]
+            distance = math.hypot(px - ex, py - ey)
 
-            distance = math.hypot(
-                px - ex,
-                py - ey
-            )
-
-            risk = max(
-                0.0,
-                (120.0 - distance) / 120.0
-            )
-
+            risk = max(0.0, (100.0 - distance) / 100.0)
             enemy_risk += risk ** 2
 
         # Avoid travelling unnecessarily far.
