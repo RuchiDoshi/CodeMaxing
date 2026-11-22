@@ -222,7 +222,7 @@ def _choose_position(x, y, cx, cy, radius,
 
 
 class Bot:
-    name = "codemax-v16"
+    name = "codemax-v18"
 
     def __init__(self, hello: mf.Hello):
         cfg = hello["config"]
@@ -417,7 +417,10 @@ class Bot:
         # damage. Legs and torso are independent (§6), so we can walk away and
         # keep shooting backwards -- and keeping them in our front arc denies
         # the x1.5 rear multiplier at the same time.
-        engage_r = 90.0 if fleeing else (110.0 if hp_frac > 0.5 else 45.0)
+        # Shooting more has won every time we have tried it and lost every
+        # time we have cut it back, so engage as far as the gun actually
+        # reaches rather than at an arbitrary 110 m.
+        engage_r = 90.0 if fleeing else (200.0 if hp_frac > 0.5 else 45.0)
         if cornered:
             engage_r = max(engage_r, 60.0)
 
@@ -447,6 +450,14 @@ class Bot:
             pz = tz + tvz * lead + 4.5
             yaw = math.atan2(py - y, px - x)
             pitch = math.atan2(pz - muzzle, max(math.hypot(px - x, py - y), 0.01))
+        elif mechs:
+            # With no firing target we used to aim along our escape heading,
+            # which puts a pursuer at exactly 180 deg -- the rear arc, where
+            # hits land at x1.5. The front arc is 180 deg wide, so simply
+            # looking at them removes the multiplier entirely.
+            n = min(mechs, key=lambda mm: math.dist(mm["pos"][:2], (x, y)))
+            yaw = math.atan2(n["pos"][1] - y, n["pos"][0] - x)
+            pitch = 0.0
         elif recently_hurt and self.hurt_bearing is not None:
             yaw, pitch = self.hurt_bearing, 0.0  # present front armour
         else:
@@ -478,7 +489,11 @@ class Bot:
 
         act["aim"] = [yaw, pitch]
         act["fire"] = [fire0, fire1]
-        if w0 and w0.get("ammo", 99) <= 2 and target is None and not w0.get("reload"):
+        # Walking into a fight part-loaded means a 2.4 s reload at about
+        # 187 dps incoming -- roughly 450 damage for nothing. Top up whenever
+        # the field is clear instead of waiting until the magazine is dry.
+        if (w0 and not mechs and not w0.get("reload")
+                and w0.get("ammo", 99) < gun_stats.get("mag", 12)):
             act["reload"] = True
 
         # -- loot and upgrades -------------------------------------------------
