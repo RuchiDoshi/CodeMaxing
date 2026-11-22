@@ -1,13 +1,11 @@
-"""Survival-first bot for mechfight/1.
+﻿"""Survival-first bot for mechfight/1.
 
 Scoring is placement, not kills, so this bot plays to outlive the field:
 it holds the inside edge of the circle the zone is closing to, keeps its
 distance from the pack, breaks contact and regenerates when hurt, and
 only shoots when a fight has already found it.
 """
-import json
 import math
-import os
 
 import mechfight as mf
 
@@ -51,20 +49,6 @@ def _clamp_circle(px, py, cx, cy, rad):
     if d <= rad or d < 1e-6:
         return px, py
     return cx + dx * rad / d, cy + dy * rad / d
-
-
-def _side(ax, ay, bx, by, cx, cy):
-    return (bx - ax) * (cy - ay) - (by - ay) * (cx - ax)
-
-
-def _seg_cross(ax, ay, bx, by, cx, cy, dx, dy):
-    """Do segments AB and CD properly cross?"""
-    d1 = _side(cx, cy, dx, dy, ax, ay)
-    d2 = _side(cx, cy, dx, dy, bx, by)
-    d3 = _side(ax, ay, bx, by, cx, cy)
-    d4 = _side(ax, ay, bx, by, dx, dy)
-    return ((d1 > 0) != (d2 > 0)) and ((d3 > 0) != (d4 > 0))
-
 
 def _predict_enemy_position(enemy, horizon=1.5):
     """
@@ -238,7 +222,7 @@ def _choose_position(x, y, cx, cy, radius,
 
 
 class Bot:
-    name = "codemax-v14"
+    name = "codemax-v9"
 
     def __init__(self, hello: mf.Hello):
         cfg = hello["config"]
@@ -248,49 +232,6 @@ class Bot:
         self.hurt_t = -99.0
         self.prev_xy = None
         self.stuck = 0
-        self.prisms = self._load_prisms(hello)
-
-    @staticmethod
-    def _load_prisms(hello):
-        """Buildings as (minx, miny, maxx, maxy, base, top, ring).
-
-        0.29 MB of JSON, ten milliseconds to parse, against a twenty second
-        hello budget. If anything goes wrong we play blind rather than die.
-        """
-        out = []
-        try:
-            path = os.path.join(hello["map"]["dir"], "v2", "world.json")
-            with open(path, "r") as fh:
-                world = json.load(fh)
-        except Exception:
-            return out
-        for p in world.get("prisms", []):
-            ring = p.get("ring") or []
-            if len(ring) < 6:
-                continue
-            xs, ys = ring[0::2], ring[1::2]
-            out.append((min(xs), min(ys), max(xs), max(ys),
-                        p.get("base", 0.0), p.get("top", 0.0), ring))
-        return out
-
-    def _blocked(self, ax, ay, az, bx, by, bz):
-        """True if a building stands between the two points."""
-        lo, hi = (az, bz) if az < bz else (bz, az)
-        sx0, sx1 = (ax, bx) if ax < bx else (bx, ax)
-        sy0, sy1 = (ay, by) if ay < by else (by, ay)
-        for px0, py0, px1, py1, base, top, ring in self.prisms:
-            if top < lo or base > hi:
-                continue
-            if px1 < sx0 or px0 > sx1 or py1 < sy0 or py0 > sy1:
-                continue
-            n = len(ring) // 2
-            for i in range(n):
-                j = (i + 1) % n
-                if _seg_cross(ax, ay, bx, by,
-                              ring[2 * i], ring[2 * i + 1],
-                              ring[2 * j], ring[2 * j + 1]):
-                    return True
-        return False
 
     # -- helpers ---------------------------------------------------------
 
@@ -492,15 +433,6 @@ class Bot:
         fire0 = False
         fire1 = False
         kind1 = (w1 or {}).get("kind")
-
-        # Vision memory keeps a mech in `mechs` for 5 s after it breaks sight
-        # (protocol.md 8), so the target may be standing behind a building.
-        # Shooting it hits the wall, wastes the magazine, and broadcasts our
-        # position 320 m to a squad that shares vision. Track it, hold fire.
-        if target is not None and self.prisms:
-            tgt = target["pos"]
-            if self._blocked(x, y, muzzle, tgt[0], tgt[1], tgt[2] + 4.5):
-                target = None
 
         if target is not None:
             ammo = (w0 or {}).get("ammo", 0)
